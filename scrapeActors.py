@@ -4,6 +4,7 @@ import re
 import time
 from selenium import webdriver
 from Sentiment import Sentiment
+
 from lxml.html import fromstring
 from nltk.stem import WordNetLemmatizer
 from wordcloud import WordCloud, STOPWORDS
@@ -48,7 +49,7 @@ def getTop10MovieForActor(actor):
 	browser.find_elements(By.CSS_SELECTOR, ".filmographyTbl_ratingCol > a")[0].click()
 	time.sleep(1)
 	csvFile = open(actor + ".csv", "w")
-	print("\"Movie Title\",\"Review\",\"Review Score\",\"Genres\"","\"Actors\"", file=csvFile)
+	print("\"Movie Title\",\"Review\",\"Review Score\",\"Genres\"","\"Actors\"")
 	for i, movieRow in enumerate(browser.find_elements(By.CSS_SELECTOR, "#filmographyTbl > tbody > tr")):
 		links.append(movieRow.find_element(By.CSS_SELECTOR, "td > .articleLink").get_attribute("href"))
 		# if i == 10:
@@ -74,7 +75,7 @@ def getTop10MovieForActor(actor):
 				# Make sure there is a score [want to see is an option]
 				if re.match("^\d+$", score):
 					count += 1
-					print("\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"" % (movieName, comment.replace("\"", "'"), score, genres, actors), file=csvFile)
+					print("\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"" % (movieName, comment.replace("\"", "'"), score, genres, actors))
 	csvFile.close()
 	browser.quit()
 
@@ -85,23 +86,47 @@ def createSupportingActorFiles(lines, actor):
 			if supporting_actor.strip() == "" or supporting_actor.startswith("as "):
 				continue
 			output = open("actorCSVs\\" + re.sub("[\\W]", "", actor + supporting_actor.replace(" ", "_")) + ".csv", "a")
-			print(line.strip(), file=output)
+			output.write(line.strip())
+			output.close()
+
+
+def get_actor_reviews(review_file):
+	# Pull reviews from actor CSV file. Returns as one string
+	raw_text = ""
+	actor_file = open(review_file, "r").readlines()	# read the file
+	file_str = "".join(actor_file)	# Convert it to string
+	lines = file_str.strip()[1:-1].split("\",\"")	# remove bloat text, chop off first and last character, then split
+	review_lines = lines[1::4]	# get every 4th line, which contains the review
+	for review in review_lines:
+		raw_text += review
+
+	return raw_text
+
 
 if __name__ == "__main__":
 	actors = ["george_clooney"] # , "johnny_depp"
 	lemmatizer = WordNetLemmatizer()
+
+	# run through every actor generating CSVs and word clouds for pairs
 	for actor in actors:
-		getTop10MovieForActor(actor)
+		#getTop10MovieForActor(actor)
 		with open(actor + ".csv", "r") as f:
 			lines = list(f)
-			createSupportingActorFiles(lines, actor)
+			#createSupportingActorFiles(lines, actor)
 		for file in os.listdir("actorCSVs"):
-			frequencies = Sentiment("".join((rows.strip()[1:-1].split("\",\"")[1]) for rows in list(open("actorCSVs\\" + file, "r")))).analyze()
+			raw_text = get_actor_reviews("actorCSVs\\" + file)
+
+			frequencies = Sentiment(raw_text).analyze()
+			# get rid of all unwanted words from frequencies list
 			for word in unusedWords:
 				word = lemmatizer.lemmatize(word)
 				frequencies.pop(word, None)
-			wc = WordCloud(max_words=50, stopwords=STOPWORDS, margin=10, random_state=1).generate("test")
+
+			# generate word clouds
+			#wc = WordCloud(max_words=50, stopwords=STOPWORDS, margin=10, random_state=1).generate("test")
+			print(file, frequencies)
+
 			wc = wordcloud_custom_color(max_words=50, height=700, width=700).generate_from_frequencies({word: Word._frequency for word, Word in frequencies.items()})
 			wc.recolor(frequencies)
-			wc.to_file("actorCSVs\\" + file + ".png")
+			wc.to_file("actorWordClouds\\" + file + ".png")
 			# os.system(actor + ".png")
