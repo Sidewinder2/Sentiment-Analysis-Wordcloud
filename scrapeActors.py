@@ -6,30 +6,14 @@ from selenium import webdriver
 from Sentiment import Sentiment
 
 from lxml.html import fromstring
-from nltk.stem import WordNetLemmatizer
+from nltk import WordNetLemmatizer, word_tokenize
 from wordcloud import WordCloud, STOPWORDS
 from selenium.webdriver.common.by import By
-from wordcloud_custom_color import wordcloud_custom_color
+#from wordcloud_custom_color import wordcloud_custom_color
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from textblob import TextBlob
 
-unusedWords = ["GILBERT","DICAPRIO","FREDDY","ACTORS","GIVES","ACTING","MARTIN","TERRY","LEONARDO","CAST","BURTON",
-				"GILLIAM","EDWARD","JOHNNY","DEPP","GEORGE","CLOONEY","MOVIE","FILM","LIKE","REALLY","SEE","MUCH","CAN","JUST","ONE",
-				"FIRST","TWO","LOT","DIDNT","DONT","THOUGH","GOOD","GREAT","WELL","GET","ALSO","THATS","SAY","EVEN",
-				"MADE","WAY","WILL","BIT","BACK","KNOW","EVER","BETTER","MANY","NEVER","SEEN","DOESNT","MAKES","THINK",
-				"NEW","BAD","LOOK","WATCH","MAKE","THERES","ENOUGH","ACTUALLY","THOUGHT","SCENES","IVE","ANOTHER",
-				"GOING","CANT","NOTHING","GOT","FIND","THINGS","ISNT","DONE","FILMS","PART","EVERY","TAKE","LITTLE",
-				"END","STILL","THING","SOMETHING","QUITE","NOW","RIGHT","HOWEVER","DEFINITELY","FEEL","WANT","MOVIES",
-				"TRUE","WORK","FOUND","ENDING","DIRECTOR","AROUND","GIVE","MAN","LIKED","MAY","WASNT","JOB","WITHOUT",
-				"SURE","COME","MIGHT","ANYTHING","EVERYTHING","TRYING","YET","ESPECIALLY","FELT","SCENE","FAR","MUST",
-				"OVERALL","TIMES","WATCHING","YEARS","ALWAYS","POINT","SINCE","DAY","FACT","HES","GETS","LAST","MINUTES",
-				"SCRIPT","SEEMS","SENSE","WORLD","ABOUT","ABOVE","AFTER","AGAIN","AGAINST","ARENT","BECAUSE","BEEN",
-				"BEFORE","BEING","BELOW","BETWEEN","BOTH","CANNOT","COULD","COULDNT","DIDNT","DOES","DOESNT","DOING",
-				"DOWN","DURING","EACH","ELSE","EVER","FROM","FURTHER","HADNT","HASNT","HAVE","HAVENT","HAVING","HERE",
-				"HERES","HERS","HERSELF","HIMSELF","HTTP","INTO","ITSELF","JUST","LIKE","MORE","MOST","MUSTNT","MYSELF",
-				"ONCE","ONLY","OTHER","OUGHT","OURS ","OURSELVES","OVER","SAME","SHALL","SHANT","SHOULD","SHOULDNT","SOME",
-				"SUCH","THAN","THAT","THATS","THEIR","THEIRS","THEM","THEMSELVES","THEN","THERE","THERES","THESE","THEY",
-				"THEYD","THEYLL","THEYRE","THEYVE","THIS","THOSE","THROUGH","UNDER","UNTIL","VERY","WASNT","WERE","WERENT",
-				"WHAT","WHATS","WHEN","WHENS","WHERE","WHERES","WHICH","WHILE","WHOM","WITH","WOULD","WOULDNT","YOUR","YOURS",
-				"YOURSELF","YOURSELVES"]
+
 
 # Chrome setting to remove initial notifications from popping up with each new browser
 def setupDriver():
@@ -102,10 +86,37 @@ def get_actor_reviews(review_file):
 
 	return raw_text
 
+def get_stopwords_fromfile(filename):
+	stopwords = list()
+	lines = open(filename, "r").readlines()  # read the file
+	for line in lines:
+		stopwords.append(line.strip("\n"))
+	return stopwords
+
+
+def lemmatized_frequencies(raw_text, stopwords = []):
+	frequencies = dict()
+	lemmatizer = WordNetLemmatizer()
+	for sentence in re.split("\\.+ ?", raw_text):
+		sentence = re.sub("[,!()-?']", " ", sentence)
+		for word in re.split(" +", sentence):
+			word = lemmatizer.lemmatize(word.upper())
+			if len(word) > 3 and word not in stopwords and word not in STOPWORDS:
+				if word in frequencies:
+					frequencies[word] = frequencies[word] + 1
+				else:
+					frequencies[word] = 0
+
+	return frequencies
 
 if __name__ == "__main__":
 	actors = ["george_clooney"] # , "johnny_depp"
 	lemmatizer = WordNetLemmatizer()
+
+
+	stopwords = get_stopwords_fromfile("stopwords.txt")
+	print(stopwords)
+
 
 	# run through every actor generating CSVs and word clouds for pairs
 	for actor in actors:
@@ -114,19 +125,28 @@ if __name__ == "__main__":
 			lines = list(f)
 			#createSupportingActorFiles(lines, actor)
 		for file in os.listdir("actorCSVs"):
+
 			raw_text = get_actor_reviews("actorCSVs\\" + file)
 
-			frequencies = Sentiment(raw_text).analyze()
-			# get rid of all unwanted words from frequencies list
-			for word in unusedWords:
-				word = lemmatizer.lemmatize(word)
-				frequencies.pop(word, None)
+			# get average sentiment
+			sentiment = TextBlob(raw_text).sentiment.polarity
+			print(file,sentiment)
+
+			# frequencies = Sentiment(raw_text).analyze()
 
 			# generate word clouds
 			#wc = WordCloud(max_words=50, stopwords=STOPWORDS, margin=10, random_state=1).generate("test")
-			print(file, frequencies)
+			# print(file, frequencies)
 
-			wc = wordcloud_custom_color(max_words=50, height=700, width=700).generate_from_frequencies({word: Word._frequency for word, Word in frequencies.items()})
-			wc.recolor(frequencies)
+			# wc = wordcloud_custom_color(max_words=20, height=700, width=700).generate_from_frequencies({word: Word._frequency for word, Word in frequencies.items()})
+			# wc.recolor(frequencies)
+
+
+			#words = list(set(word_tokenize(raw_text)))
+			frequencies = lemmatized_frequencies(raw_text, stopwords)
+			# generate wordcloud
+			wc = WordCloud(max_words= 50,width=1800, height=1400).generate_from_frequencies(frequencies)
 			wc.to_file("actorWordClouds\\" + file + ".png")
+
+
 			# os.system(actor + ".png")
