@@ -3,14 +3,14 @@ import os
 import re
 import time
 from selenium import webdriver
-from Sentiment import Sentiment
+#from Sentiment import Sentiment
 
 from lxml.html import fromstring
 from nltk import WordNetLemmatizer, word_tokenize
 from wordcloud import WordCloud, STOPWORDS
 from selenium.webdriver.common.by import By
 #from wordcloud_custom_color import wordcloud_custom_color
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+#from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from textblob import TextBlob
 
 
@@ -79,8 +79,8 @@ def get_actor_reviews(review_file):
 	raw_text = ""
 	actor_file = open(review_file, "r").readlines()	# read the file
 	file_str = "".join(actor_file)	# Convert it to string
-	lines = file_str.strip()[1:-1].split("\",\"")	# remove bloat text, chop off first and last character, then split
-	review_lines = lines[1::4]	# get every 4th line, which contains the review
+	lines = file_str[1:-1].replace("\"\"", "\",\"").split("\",\"")  # remove bloat text, chop off first and last character, then split
+	review_lines = lines[1::5]	# get every 4th line, which contains the review
 	for review in review_lines:
 		raw_text += review
 
@@ -109,28 +109,43 @@ def lemmatized_frequencies(raw_text, stopwords = []):
 
 	return frequencies
 
+def get_actor_movies(review_file):
+	# checks to see if two actors have enough movies together
+	movies = set()
+	actor_file = open(review_file, "r").readlines()  # read the file
+	file_str = "".join(actor_file)  # Convert it to string
+	lines = file_str[1:-1].replace("\"\"","\",\"").split("\",\"")  # remove bloat text, chop off first and last character, then split
+	movie_lines = lines[0::5]  # get every 4th line, which contains the review
+	for movie in movie_lines:
+		movies.add(movie)
+
+	return movies
+
 if __name__ == "__main__":
-	actors = ["george_clooney"] # , "johnny_depp"
+	actors = ["george_clooney","johnny_depp"] # , "george_clooney"
 	lemmatizer = WordNetLemmatizer()
 
-
-	stopwords = get_stopwords_fromfile("stopwords.txt")
-	print(stopwords)
-
+	stopwords = set(get_stopwords_fromfile("stopwords.txt"))
+	stopwords = stopwords.union(STOPWORDS)
 
 	# run through every actor generating CSVs and word clouds for pairs
 	for actor in actors:
 		#getTop10MovieForActor(actor)
 		with open(actor + ".csv", "r") as f:
 			lines = list(f)
-			#createSupportingActorFiles(lines, actor)
+			createSupportingActorFiles(lines, actor)
 		for file in os.listdir("actorCSVs"):
+
+			# actors must have enough movies together to count
+			movies = get_actor_movies("actorCSVs\\" + file)
+			if len(movies) < 2:
+				continue
 
 			raw_text = get_actor_reviews("actorCSVs\\" + file)
 
 			# get average sentiment
 			sentiment = TextBlob(raw_text).sentiment.polarity
-			print(file,sentiment)
+			print(file,sentiment, movies)
 
 			# frequencies = Sentiment(raw_text).analyze()
 
@@ -140,7 +155,6 @@ if __name__ == "__main__":
 
 			# wc = wordcloud_custom_color(max_words=20, height=700, width=700).generate_from_frequencies({word: Word._frequency for word, Word in frequencies.items()})
 			# wc.recolor(frequencies)
-
 
 			#words = list(set(word_tokenize(raw_text)))
 			frequencies = lemmatized_frequencies(raw_text, stopwords)
